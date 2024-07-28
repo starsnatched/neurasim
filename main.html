@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Historically Accurate Neural Network Simulation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #333;
+            background-image: url('https://assets.userstyles.org/assets_packs/type=style/user_id=3845746/screenshot_aecabaca-2620-4566-ab42-2403b363928c.webp');
+            background-size: cover;
+            background-position: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 28px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        #network-canvas {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 25px;
+            transition: background 0.3s, transform 0.1s;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        #toggle-sim-btn {
+            background: rgba(46, 204, 113, 0.1);
+        }
+        #toggle-sim-btn:hover {
+            background: rgba(46, 204, 113, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Neural Network Simulation</h1>
+        <canvas id="network-canvas" width="600" height="400"></canvas>
+        <div class="controls">
+            <button id="reset-btn">Reset Network</button>
+            <button id="toggle-sim-btn">Start Simulation</button>
+        </div>
+    </div>
+
+    <script>
+        class Vector2D {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+
+            add(v) {
+                return new Vector2D(this.x + v.x, this.y + v.y);
+            }
+
+            subtract(v) {
+                return new Vector2D(this.x - v.x, this.y - v.y);
+            }
+
+            multiply(scalar) {
+                return new Vector2D(this.x * scalar, this.y * scalar);
+            }
+
+            magnitude() {
+                return Math.sqrt(this.x * this.x + this.y * this.y);
+            }
+
+            normalize() {
+                const mag = this.magnitude();
+                return new Vector2D(this.x / mag, this.y / mag);
+            }
+
+            rotate(angle) {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                return new Vector2D(
+                    this.x * cos - this.y * sin,
+                    this.x * sin + this.y * cos
+                );
+            }
+        }
+
+        class Neuron {
+            constructor(position, type = 'excitatory') {
+                this.position = position;
+                this.type = type;
+                this.voltage = -70;
+                this.threshold = -55;
+                this.is_spiking = false;
+                this.refractory_period = 2;
+                this.refractory_timer = 0;
+                this.time = 0;
+                
+                this.dendrites = [];
+                this.axons = [];
+                this.synapses = [];
+
+                this.g_Na = 120;
+                this.g_K = 36;  
+                this.g_L = 0.3; 
+                this.E_Na = 55; 
+                this.E_K = -77; 
+                this.E_L = -54; 
+                this.m = 0.05;  
+                this.h = 0.54;  
+                this.n = 0.34;  
+
+                this.glutamate = 0;
+                this.gaba = 0;
+                this.dopamine = 0;
+                this.serotonin = 0;
+
+                this.stimulation_level = 0;
+                this.stimulation_decay_rate = 0.1;
+                this.activation_threshold = 0.5; 
+                this.bdnf_level = 1.0;
+                this.growth_factor = 1.0;
+                this.branch_probability = 0.05;
+
+                this.capacitance = 1;
+                this.stimulation_color = 'rgb(255, 255, 255)';
+            }
+
+            update(dt) {
+                if (this.refractory_timer > 0) {
+                    this.refractory_timer -= dt;
+                    this.voltage = -70;
+                    this.is_spiking = false;
+                    return;
+                }
+
+                const [dv, dm, dh, dn] = this.hodgkinHuxleyDerivatives();
+                this.voltage += dv * dt;
+                this.m += dm * dt;
+                this.h += dh * dt;
+                this.n += dn * dt;
+
+                if (this.voltage >= this.threshold) {
+                    this.is_spiking = true;
+                    this.voltage = 40;
+                    this.refractory_timer = this.refractory_period;
+                    this.releaseNeurotransmitters();
+                    this.propagate_signal();
+                }
+
+                this.time += dt;
+
+                this.glutamate *= Math.exp(-dt / 5);
+                this.gaba *= Math.exp(-dt / 5);
+                this.dopamine *= Math.exp(-dt / 10);
+                this.serotonin *= Math.exp(-dt / 15);
+
+                this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
+                this.bdnf_level = 1.0 + 0.5 * this.stimulation_level;
+                this.growth_factor = 1.0 + 0.2 * this.stimulation_level;
+
+                for (const axon of this.axons) {
+                    axon.grow(dt);
+                }
+                for (const dendrite of this.dendrites) {
+                    dendrite.grow(dt);
+                }
+
+                if (Math.random() < this.branch_probability * dt) {
+                    this.create_branch();
+                }
+
+                const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+                const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+                this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+            }
+
+            hodgkinHuxleyDerivatives() {
+                const alpha_m = 0.1 * (this.voltage + 40) / (1 - Math.exp(-(this.voltage + 40) / 10));
+                const beta_m = 4 * Math.exp(-(this.voltage + 65) / 18);
+                const alpha_h = 0.07 * Math.exp(-(this.voltage + 65) / 20);
+                const beta_h = 1 / (1 + Math.exp(-(this.voltage + 35) / 10));
+                const alpha_n = 0.01 * (this.voltage + 55) / (1 - Math.exp(-(this.voltage + 55) / 10));
+                const beta_n = 0.125 * Math.exp(-(this.voltage + 65) / 80);
+
+                const I_Na = this.g_Na * Math.pow(this.m, 3) * this.h * (this.voltage - this.E_Na);
+                const I_K = this.g_K * Math.pow(this.n, 4) * (this.voltage - this.E_K);
+                const I_L = this.g_L * (this.voltage - this.E_L);
+
+                const dv = (-I_Na - I_K - I_L) / this.capacitance;
+                const dm = alpha_m * (1 - this.m) - beta_m * this.m;
+                const dh = alpha_h * (1 - this.h) - beta_h * this.h;
+                const dn = alpha_n * (1 - this.n) - beta_n * this.n;
+
+                return [dv, dm, dh, dn];
+            }
+
+            releaseNeurotransmitters() {
+                if (this.type === 'excitatory') {
+                    this.glutamate += 1;
+                } else if (this.type === 'inhibitory') {
+                    this.gaba += 1;
+                }
+                this.dopamine += 0.1;
+                this.serotonin += 0.05;
+            }
+
+            propagate_signal() {
+                for (const synapse of this.synapses) {
+                    if (synapse.pre_neuron === this) {
+                        synapse.post_neuron.receive_signal(synapse.weight, this.type);
+                    }
+                }
+            }
+
+            receive_signal(strength, type) {
+                if (type === 'excitatory') {
+                    this.stimulation_level += strength;
+                    this.voltage += strength * 5;
+                } else if (type === 'inhibitory') {
+                    this.stimulation_level -= strength;
+                    this.voltage -= strength * 5;
+                }
+                this.stimulation_level = Math.max(0, Math.min(this.stimulation_level, 1));
+            }
+
+            create_branch() {
+                if (Math.random() < 0.5 && this.axons.length > 0) {
+                    const axon = this.axons[Math.floor(Math.random() * this.axons.length)];
+                    const new_direction = axon.direction.rotate(Math.random() * Math.PI / 2 - Math.PI / 4);
+                    this.axons.push(new Axon(this, new_direction, axon.growth_cone));
+                } else if (this.dendrites.length > 0) {
+                    const dendrite = this.dendrites[Math.floor(Math.random() * this.dendrites.length)];
+                    const new_direction = dendrite.direction.rotate(Math.random() * Math.PI / 2 - Math.PI / 4);
+                    this.dendrites.push(new Dendrite(this, new_direction, dendrite.tip));
+                }
+            }
+
+            grow_axon(direction) {
+                this.axons.push(new Axon(this, direction));
+            }
+
+            grow_dendrite(direction) {
+                this.dendrites.push(new Dendrite(this, direction));
+            }
+
+            stimulate(amount) {
+                this.stimulation_level += amount;
+                this.stimulation_level = Math.min(this.stimulation_level, 1);
+                this.voltage += amount * 30;
+                
+                const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+                const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+                this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+            }
+
+            alpha_m() { return 0.1 * (this.voltage + 40) / (1 - Math.exp(-(this.voltage + 40) / 10)); }
+            beta_m() { return 4 * Math.exp(-(this.voltage + 65) / 18); }
+            alpha_h() { return 0.07 * Math.exp(-(this.voltage + 65) / 20); }
+            beta_h() { return 1 / (1 + Math.exp(-(this.voltage + 35) / 10)); }
+            alpha_n() { return 0.01 * (this.voltage + 55) / (1 - Math.exp(-(this.voltage + 55) / 10)); }
+            beta_n() { return 0.125 * Math.exp(-(this.voltage + 65) / 80); }
+        }
+
+        class Axon {
+            constructor(neuron, direction, start_point = null) {
+                this.neuron = neuron;
+                this.direction = direction;
+                this.length = 0;
+                this.growth_rate = 10;
+                this.growth_cone = start_point || new Vector2D(neuron.position.x, neuron.position.y);
+                this.segments = [this.growth_cone];
+                this.max_segment_length = 20;
+            }
+
+            grow(dt) {
+                this.length += this.growth_rate * dt * this.neuron.bdnf_level;
+                
+                const random_factor = new Vector2D(Math.random() - 0.5, Math.random() - 0.5).multiply(5 * (2 - this.neuron.stimulation_level));
+                const growth_direction = this.direction.add(random_factor).normalize();
+                const growth_amount = growth_direction.multiply(this.growth_rate * dt * this.neuron.bdnf_level);
+                this.growth_cone = this.growth_cone.add(growth_amount);
+
+                if (this.growth_cone.subtract(this.segments[this.segments.length - 1]).magnitude() > this.max_segment_length) {
+                    this.segments.push(new Vector2D(this.growth_cone.x, this.growth_cone.y));
+                }
+
+                for (const target_neuron of network.neurons) {
+                    if (target_neuron !== this.neuron) {
+                        for (const dendrite of target_neuron.dendrites) {
+                            if (this.check_synapse_formation(dendrite)) {
+                                this.form_synapse(dendrite);
+                            }
+                        }
+                    }
+                }
+            }
+
+            check_synapse_formation(dendrite) {
+                const distance = this.growth_cone.subtract(dendrite.tip).magnitude();
+                if (distance < 5) {
+                    const formation_probability = 0.1 * this.neuron.bdnf_level * dendrite.neuron.bdnf_level;
+                    return Math.random() < formation_probability;
+                }
+                return false;
+            }
+
+            form_synapse(dendrite) {
+                const synapse = new Synapse(this.neuron, dendrite.neuron);
+                this.neuron.synapses.push(synapse);
+                dendrite.neuron.synapses.push(synapse);
+            }
+        }
+
+        class Dendrite {
+            constructor(neuron, direction, start_point = null) {
+                this.neuron = neuron;
+                this.direction = direction;
+                this.length = 0;
+                this.growth_rate = 5;
+                this.tip = start_point || new Vector2D(neuron.position.x, neuron.position.y);
+                this.segments = [this.tip];
+                this.max_segment_length = 15;
+            }
+
+            grow(dt) {
+                this.length += this.growth_rate * dt * this.neuron.bdnf_level;
+                const random_factor = new Vector2D(Math.random() - 0.5, Math.random() - 0.5).multiply(3 * (2 - this.neuron.stimulation_level));
+                const growth_direction = this.direction.add(random_factor).normalize();
+                const growth_amount = growth_direction.multiply(this.growth_rate * dt * this.neuron.bdnf_level);
+                this.tip = this.tip.add(growth_amount);
+
+                if (this.tip.subtract(this.segments[this.segments.length - 1]).magnitude() > this.max_segment_length) {
+                    this.segments.push(new Vector2D(this.tip.x, this.tip.y));
+                }
+            }
+        }
+
+        class Synapse {
+            constructor(pre_neuron, post_neuron, initial_weight = 0.5) {
+                this.pre_neuron = pre_neuron;
+                this.post_neuron = post_neuron;
+                this.weight = initial_weight;
+                this.max_weight = 1.0;
+                this.min_weight = 0.1;
+                this.neurotransmitter = 0;
+                this.last_spike_time = -Infinity;
+                
+                this.is_excitatory = Math.random() < 0.8;
+                this.reversal_potential = this.is_excitatory ? 0 : -70;
+                
+                this.resources = 1;
+                this.utilization = 0.3;
+                this.tau_rec = 800;
+                this.tau_facil = 0;
+            }
+
+            update(dt) {
+                if (this.pre_neuron.is_spiking) {
+                    const t_elapsed = this.pre_neuron.time - this.last_spike_time;
+                    this.resources = 1 - (1 - this.resources) * Math.exp(-t_elapsed / this.tau_rec);
+                    this.utilization += this.utilization * (1 - this.utilization) * Math.exp(-t_elapsed / this.tau_facil);
+                    
+                    const release_probability = this.resources * this.utilization;
+                    this.neurotransmitter = release_probability;
+                    this.resources -= release_probability;
+                    
+                    this.last_spike_time = this.pre_neuron.time;
+                    this.weight += 0.01;
+                    this.weight = Math.min(this.weight, this.max_weight);
+                } else {
+                    this.neurotransmitter *= Math.exp(-dt / 5);
+                    
+                    this.weight -= 0.001 * dt;
+                    this.weight = Math.max(this.weight, this.min_weight);
+                }
+
+                const time_diff = this.post_neuron.time - this.last_spike_time;
+                if (Math.abs(time_diff) < 20) {
+                    const learning_rate = 0.001;
+                    const delta_w = learning_rate * Math.exp(-Math.abs(time_diff) / 10) * Math.sign(time_diff);
+                    this.weight += delta_w;
+                    this.weight = Math.max(0, Math.min(this.weight, 1));
+                }
+            }
+
+            current(post_voltage) {
+                return this.weight * this.neurotransmitter * (post_voltage - this.reversal_potential);
+            }
+        }
+
+        class NeuralNetwork {
+            constructor(num_neurons) {
+                this.neurons = [];
+                for (let i = 0; i < num_neurons; i++) {
+                    const x = Math.random() * 550 + 25;
+                    const y = Math.random() * 350 + 25;
+                    this.neurons.push(new Neuron(new Vector2D(x, y)));
+                }
+                this.initialize_neuron_growth();
+            }
+
+            initialize_neuron_growth() {
+                for (const neuron of this.neurons) {
+                    const axon_direction = new Vector2D(Math.random() - 0.5, Math.random() - 0.5).normalize();
+                    neuron.grow_axon(axon_direction);
+
+                    const num_dendrites = Math.floor(Math.random() * 4) + 2;
+                    for (let i = 0; i < num_dendrites; i++) {
+                        const dendrite_direction = new Vector2D(Math.random() - 0.5, Math.random() - 0.5).normalize();
+                        neuron.grow_dendrite(dendrite_direction);
+                    }
+                }
+            }
+
+            initialize_connectivity() {
+                for (const pre_neuron of this.neurons) {
+                    for (const post_neuron of this.neurons) {
+                        if (pre_neuron !== post_neuron && Math.random() < 0.2) {
+                            const synapse = new Synapse(pre_neuron, post_neuron);
+                            pre_neuron.synapses.push(synapse);
+                            post_neuron.synapses.push(synapse);
+                        }
+                    }
+                }
+            }
+
+            stimulate_neuron(index) {
+                this.neurons[index].stimulate(1);
+                for (const synapse of this.neurons[index].synapses) {
+                    if (synapse.pre_neuron === this.neurons[index]) {
+                        synapse.post_neuron.receive_signal(synapse.weight);
+                    }
+                }
+            }
+
+            prune_connections() {
+                for (const neuron of this.neurons) {
+                    neuron.synapses = neuron.synapses.filter(synapse => synapse.weight > 0.1);
+                }
+            }
+
+            update(dt) {
+                for (const neuron of this.neurons) {
+                    neuron.update(dt);
+                }
+                for (const neuron of this.neurons) {
+                    for (const synapse of neuron.synapses) {
+                        synapse.update(dt);
+                    }
+                }
+            }
+        }
+
+        const canvas = document.getElementById('network-canvas');
+        const ctx = canvas.getContext('2d');
+        let network = new NeuralNetwork(20);
+        let isSimulating = false;
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // ctx.fillStyle = '#f8f9fa';
+            // ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#e9ecef';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            for (const neuron of network.neurons) {
+                for (const axon of neuron.axons) {
+                    ctx.beginPath();
+                    ctx.moveTo(neuron.position.x, neuron.position.y);
+                    for (const segment of axon.segments) {
+                        ctx.lineTo(segment.x, segment.y);
+                    }
+                    ctx.lineTo(axon.growth_cone.x, axon.growth_cone.y);
+                    ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+                for (const dendrite of neuron.dendrites) {
+                    ctx.beginPath();
+                    ctx.moveTo(neuron.position.x, neuron.position.y);
+                    for (const segment of dendrite.segments) {
+                        ctx.lineTo(segment.x, segment.y);
+                    }
+                    ctx.lineTo(dendrite.tip.x, dendrite.tip.y);
+                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+            }
+
+            for (const neuron of network.neurons) {
+                for (const synapse of neuron.synapses) {
+                    if (synapse.pre_neuron === neuron) {
+                        ctx.beginPath();
+                        ctx.moveTo(synapse.pre_neuron.position.x, synapse.pre_neuron.position.y);
+                        ctx.lineTo(synapse.post_neuron.position.x, synapse.post_neuron.position.y);
+                        ctx.strokeStyle = `rgba(231, 76, 60, ${synapse.weight * 0.7})`;
+                        ctx.lineWidth = synapse.weight * 2;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            for (const neuron of network.neurons) {
+                ctx.beginPath();
+                ctx.arc(neuron.position.x, neuron.position.y, 7, 0, Math.PI * 2);
+                const activationLevel = (neuron.voltage + 70) / 110;
+                const color = neuron.is_spiking ? '#e74c3c' : neuron.stimulation_color;
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(neuron.position.x, neuron.position.y, 10, 0, Math.PI * 2 * activationLevel);
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        function animate() {
+            if (isSimulating) {
+                for (let i = 0; i < 10; i++) { 
+                    network.update(0.01);
+                }
+            }
+            drawNetwork();
+            requestAnimationFrame(animate);
+        }
+
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            network.neurons.forEach((neuron, index) => {
+                const dx = neuron.position.x - x;
+                const dy = neuron.position.y - y;
+                if (Math.sqrt(dx*dx + dy*dy) < 10) {
+                    network.stimulate_neuron(index);
+                }
+            });
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            network = new NeuralNetwork(20);
+        });
+
+        document.getElementById('toggle-sim-btn').addEventListener('click', (event) => {
+            isSimulating = !isSimulating;
+            event.target.textContent = isSimulating ? 'Stop Simulation' : 'Start Simulation';
+        });
+
+        animate();
+    </script>
+</body>
+</html>
