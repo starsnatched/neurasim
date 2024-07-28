@@ -1417,7 +1417,7 @@
             }
 
             propagate_signal(neuron, depth = 0) {
-                if (depth > 500) return;
+                if (depth > 50) return;
 
                 for (const synapse of neuron.synapses) {
                     if (synapse.pre_neuron === neuron) {
