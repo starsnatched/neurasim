@@ -93,6 +93,38 @@
             right: 10px;
             z-index: 1000;
         }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 25px;
+            transition: background 0.3s, transform 0.1s;
+        }
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .control-btn:active {
+            transform: scale(0.98);
+        }
+        #reward-btn {
+            background: rgba(46, 204, 113, 0.1);
+        }
+        #reward-btn:hover {
+            background: rgba(46, 204, 113, 0.3);
+        }
+        #punish-btn {
+            background: rgba(231, 76, 60, 0.1);
+        }
+        #punish-btn:hover {
+            background: rgba(231, 76, 60, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -100,8 +132,10 @@
         <h1>Neural Network Simulation</h1>
         <canvas id="network-canvas" width="600" height="400"></canvas>
         <div class="controls">
-            <button id="reset-btn">Reset Network</button>
-            <button id="toggle-sim-btn">Start Simulation</button>
+            <button id="reset-btn" class="control-btn">Reset Network</button>
+            <button id="toggle-sim-btn" class="control-btn">Start Simulation</button>
+            <button id="reward-btn" class="control-btn">Reward</button>
+            <button id="punish-btn" class="control-btn">Punish</button>
         </div>
     </div>
     <div id="error-console">
@@ -223,6 +257,11 @@
 
                 this.neurotransmitter_release_probability = 0.5;
                 this.neurotransmitter_reuptake_rate = 0.1;
+
+                this.dopamine_receptors = Math.random() * 0.5 + 0.5; 
+                this.serotonin_receptors = Math.random() * 0.5 + 0.5;
+                this.dopamine_level = 0;
+                this.serotonin_level = 0;
 
                 this.neurotransmitters = {
                     glutamate: { vesicles: 1000, recycling_pool: 100, readily_releasable_pool: 10, synthesis_rate: 0.1 },
@@ -382,13 +421,12 @@
                 this.h += dh * dt;
                 this.n += dn * dt;
 
-                if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
-                this.is_spiking = true;
-                this.voltage = 40;
-                this.refractory_timer = this.refractory_period;
-                this.releaseNeurotransmitters();
-                this.propagate_signal();
-                }
+                // if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
+                // this.is_spiking = true;
+                // this.voltage = 40;
+                // this.refractory_timer = this.refractory_period;
+                // this.propagate_signal();
+                // }
 
                 this.activation *= Math.exp(-this.activation_decay_rate * dt);
                 
@@ -396,6 +434,7 @@
 
                 if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
                     this.spike();
+                    this.releaseNeurotransmitters();
                     this.propagate_signal();
                 }
 
@@ -446,6 +485,7 @@
                 this.updateAxonalConduction(dt);
                 this.updateNetworkEffects(dt);
                 this.updateSignalingCascades(dt);
+                this.updateNeurotransmitterLevels(dt);
 
                 this.updateVisualRepresentation();
 
@@ -459,6 +499,17 @@
                 this.refractory_timer = this.refractory_period;
                 this.activation = 1;
                 this.releaseNeurotransmitters();
+            }
+
+            updateNeurotransmitterLevels(dt) {
+                this.dopamine_level *= Math.exp(-dt / 10); 
+                this.serotonin_level *= Math.exp(-dt / 20);
+
+                this.threshold -= this.dopamine_level * this.dopamine_receptors * 5;
+                this.threshold = Math.max(this.threshold, -65);
+
+                this.threshold += this.serotonin_level * this.serotonin_receptors * 3;
+                this.threshold = Math.min(this.threshold, -45); 
             }
 
             stimulate(amount) {
@@ -1117,6 +1168,8 @@
                 this.facilitation_rate = 0.1;
                 this.depression_rate = 0.2;
                 this.recovery_rate = 0.01;
+                this.dopamine_sensitivity = Math.random() * 0.5 + 0.5; 
+                this.serotonin_sensitivity = Math.random() * 0.5 + 0.5;
             }
 
             update(dt) {
@@ -1146,6 +1199,14 @@
                     this.weight += delta_w;
                     this.weight = Math.max(0, Math.min(this.weight, 1));
                 }
+
+                const dopamine_effect = this.pre_neuron.dopamine_level * this.dopamine_sensitivity;
+                this.weight += dopamine_effect * 0.01;
+
+                const serotonin_effect = this.pre_neuron.serotonin_level * this.serotonin_sensitivity;
+                this.weight -= serotonin_effect * 0.005;
+
+                this.weight = Math.max(0.1, Math.min(1, this.weight));
 
                 this.updateVesicles(dt);
                 this.updatePostsynapticReceptors(dt);
@@ -1336,6 +1397,20 @@
                 neuron.flash_duration = 20;
             }
 
+            reward(amount = 1) {
+                for (const neuron of this.neurons) {
+                    neuron.dopamine_level += amount * neuron.dopamine_receptors;
+                }
+                console.log("Network rewarded with dopamine");
+            }
+
+            punish(amount = 1) {
+                for (const neuron of this.neurons) {
+                    neuron.serotonin_level += amount * neuron.serotonin_receptors;
+                }
+                console.log("Network punished with serotonin");
+            }
+
             propagate_signal(neuron, depth = 0) {
                 if (depth > 100) return;
 
@@ -1405,6 +1480,16 @@
                 ctx.stroke();
             }
 
+            for (const glial_cell of network.glia) {
+                ctx.beginPath();
+                ctx.arc(glial_cell.position.x, glial_cell.position.y, glial_cell.size, 0, Math.PI * 2);
+                ctx.fillStyle = glial_cell.color;
+                ctx.fill();
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
             for (const neuron of network.neurons) {
                 for (const axon of neuron.axons) {
                     ctx.beginPath();
@@ -1428,6 +1513,17 @@
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
                 }
+                ctx.beginPath();
+                ctx.arc(neuron.position.x, neuron.position.y, 12, 0, Math.PI * 2 * neuron.dopamine_level);
+                ctx.strokeStyle = 'rgba(46, 204, 113, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(neuron.position.x, neuron.position.y, 14, 0, Math.PI * 2 * neuron.serotonin_level);
+                ctx.strokeStyle = 'rgba(231, 76, 60, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             }
 
             for (const neuron of network.neurons) {
@@ -1436,8 +1532,8 @@
                         ctx.beginPath();
                         ctx.moveTo(synapse.pre_neuron.position.x, synapse.pre_neuron.position.y);
                         ctx.lineTo(synapse.post_neuron.position.x, synapse.post_neuron.position.y);
-                        ctx.strokeStyle = `rgba(231, 76, 60, ${synapse.weight * 0.7})`;
-                        ctx.lineWidth = synapse.weight * 2;
+                        ctx.strokeStyle = `rgba(231, 76, 60, ${synapse.weight * 0.4})`;
+                        ctx.lineWidth = synapse.weight;
                         ctx.stroke();
                     }
                 }
@@ -1464,16 +1560,6 @@
                 ctx.arc(neuron.position.x, neuron.position.y, 10, 0, Math.PI * 2 * activationLevel);
                 ctx.strokeStyle = '#f39c12';
                 ctx.lineWidth = 3;
-                ctx.stroke();
-            }
-
-            for (const glial_cell of network.glia) {
-                ctx.beginPath();
-                ctx.arc(glial_cell.position.x, glial_cell.position.y, glial_cell.size, 0, Math.PI * 2);
-                ctx.fillStyle = glial_cell.color;
-                ctx.fill();
-                ctx.strokeStyle = '#2c3e50';
-                ctx.lineWidth = 1;
                 ctx.stroke();
             }
         }
@@ -1560,6 +1646,32 @@
                 console.log('Simulation toggled:', isSimulating);
             } catch (error) {
                 logError(`Error toggling simulation: ${error.message}`);
+                console.error(error);
+            }
+        });
+
+        document.getElementById('reward-btn').addEventListener('click', () => {
+            try {
+                network.reward();
+                canvas.style.boxShadow = '0 0 20px rgba(46, 204, 113, 0.5)';
+                setTimeout(() => {
+                    canvas.style.boxShadow = 'none';
+                }, 300);
+            } catch (error) {
+                logError(`Error rewarding network: ${error.message}`);
+                console.error(error);
+            }
+        });
+
+        document.getElementById('punish-btn').addEventListener('click', () => {
+            try {
+                network.punish();
+                canvas.style.boxShadow = '0 0 20px rgba(231, 76, 60, 0.5)';
+                setTimeout(() => {
+                    canvas.style.boxShadow = 'none';
+                }, 300);
+            } catch (error) {
+                logError(`Error punishing network: ${error.message}`);
                 console.error(error);
             }
         });
