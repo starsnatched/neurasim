@@ -198,6 +198,7 @@
                 this.dopamine = 0;
                 this.serotonin = 0;
                 this.activation = 0;
+                this.flash_duration = 0;
 
                 this.stimulation_level = 0;
                 this.stimulation_decay_rate = 0.1;
@@ -461,10 +462,20 @@
             }
 
             stimulate(amount) {
-                this.received_signals += amount;
-                this.stimulation_level += amount;
-                this.stimulation_level = Math.min(this.stimulation_level, 1);
-            }
+                    this.stimulation_level += amount;
+                    this.stimulation_level = Math.min(this.stimulation_level, 1);
+                    this.voltage += amount * 30;
+                    
+                    if (!this.is_spiking && this.refractory_timer <= 0) {
+                        this.spike();
+                    }
+                    
+                    this.flash_duration = 20;
+                    
+                    const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+                    const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+                    this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+                }
 
             updateSignalingCascades(dt) {
                 for (let cascade in this.signaling_cascades) {
@@ -1318,23 +1329,27 @@
             }
 
             stimulate_neuron(index) {
-                this.neurons[index].stimulate(1);
-                this.propagate_signal(this.neurons[index]);
+                const neuron = this.neurons[index];
+                neuron.stimulate(1);
+                this.propagate_signal(neuron);
+                
+                neuron.flash_duration = 20;
             }
 
             propagate_signal(neuron, depth = 0) {
-                if (depth > 5) return;
+                if (depth > 100) return;
 
                 for (const synapse of neuron.synapses) {
                     if (synapse.pre_neuron === neuron) {
                         const signal_strength = synapse.weight * neuron.activation;
-                        synapse.post_neuron.receive_signal(signal_strength, neuron.type);
                         
-                        if (signal_strength > 0.1) {
-                            setTimeout(() => {
+                        setTimeout(() => {
+                            synapse.post_neuron.receive_signal(signal_strength, neuron.type);
+                            
+                            if (signal_strength > 0.1) {
                                 this.propagate_signal(synapse.post_neuron, depth + 1);
-                            }, 50);
-                        }
+                            }
+                        }, 100 * (depth + 1));
                     }
                 }
             }
@@ -1432,7 +1447,13 @@
                 ctx.beginPath();
                 ctx.arc(neuron.position.x, neuron.position.y, 7, 0, Math.PI * 2);
                 const activationLevel = (neuron.voltage + 70) / 110;
-                const color = neuron.is_spiking ? '#e74c3c' : neuron.stimulation_color;
+                let color = neuron.is_spiking ? '#e74c3c' : neuron.stimulation_color;
+                
+                if (neuron.flash_duration > 0) {
+                    color = `rgb(255, ${255 - neuron.flash_duration * 10}, 0)`;
+                    neuron.flash_duration--;
+                }
+                
                 ctx.fillStyle = color;
                 ctx.fill();
                 ctx.strokeStyle = '#2c3e50';
@@ -1504,13 +1525,19 @@
                 const x = event.clientX - rect.left;
                 const y = event.clientY - rect.top;
                 
+                let stimulated = false;
                 network.neurons.forEach((neuron, index) => {
                     const dx = neuron.position.x - x;
                     const dy = neuron.position.y - y;
-                    if (Math.sqrt(dx*dx + dy*dy) < 10) {
+                    if (Math.sqrt(dx*dx + dy*dy) < 15) {
                         network.stimulate_neuron(index);
+                        stimulated = true;
                     }
                 });
+                
+                if (!stimulated) {
+                    console.log("No neuron stimulated. Click position:", x, y);
+                }
             } catch (error) {
                 logError(`Error in canvas click event: ${error.message}`);
                 console.error(error);
