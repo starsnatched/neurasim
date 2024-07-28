@@ -499,6 +499,7 @@
                 this.refractory_timer = this.refractory_period;
                 this.activation = 1;
                 this.releaseNeurotransmitters();
+                this.flash_duration = 20;
             }
 
             updateNeurotransmitterLevels(dt) {
@@ -955,6 +956,10 @@
                 this.updateVisualRepresentation();
 
                 this.atp -= 500;
+
+                if (this.voltage >= this.threshold) {
+                    this.spike();
+                }
             }
 
             updateVisualRepresentation() {
@@ -1412,7 +1417,7 @@
             }
 
             propagate_signal(neuron, depth = 0) {
-                if (depth > 100) return;
+                if (depth > 500) return;
 
                 for (const synapse of neuron.synapses) {
                     if (synapse.pre_neuron === neuron) {
@@ -1421,9 +1426,7 @@
                         setTimeout(() => {
                             synapse.post_neuron.receive_signal(signal_strength, neuron.type);
                             
-                            if (signal_strength > 0.1) {
-                                this.propagate_signal(synapse.post_neuron, depth + 1);
-                            }
+                            this.propagate_signal(synapse.post_neuron, depth + 1);
                         }, 100 * (depth + 1));
                     }
                 }
