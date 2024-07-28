@@ -157,10 +157,23 @@
                 this.refractory_period = 2;
                 this.refractory_timer = 0;
                 this.time = 0;
+                this.received_signals = 0;
                 
                 this.dendrites = [];
                 this.axons = [];
                 this.synapses = [];
+                this.neighboring_neurons = [];
+
+                this.atp = 1000000;
+                this.atp_consumption_rate = 100;
+                this.atp_production_rate = 110;
+
+                this.channel_open_probability = 0.5;
+                this.vesicle_release_probability = 0.3;
+
+                this.network_activity = 0;
+
+                this.visual_element = null;
 
                 this.a = 0.02;
                 this.b = 0.2;
@@ -184,6 +197,7 @@
                 this.gaba = 0;
                 this.dopamine = 0;
                 this.serotonin = 0;
+                this.activation = 0;
 
                 this.stimulation_level = 0;
                 this.stimulation_decay_rate = 0.1;
@@ -200,6 +214,15 @@
                 this.potassium_concentration = 5.0;
                 this.sodium_concentration = 15.0;
 
+                this.resting_potential = -70;
+                this.voltage = this.resting_potential;
+
+                this.absolute_refractory_period = 0.001;
+                this.relative_refractory_period = 0.005;
+
+                this.neurotransmitter_release_probability = 0.5;
+                this.neurotransmitter_reuptake_rate = 0.1;
+
                 this.neurotransmitters = {
                     glutamate: { vesicles: 1000, recycling_pool: 100, readily_releasable_pool: 10, synthesis_rate: 0.1 },
                     gaba: { vesicles: 1000, recycling_pool: 100, readily_releasable_pool: 10, synthesis_rate: 0.1 },
@@ -210,15 +233,16 @@
                 };
 
                 this.ion_channels = {
-                    nav1_1: { activation: 0, inactivation: 1, density: 10 },
-                    nav1_6: { activation: 0, inactivation: 1, density: 15 },
-                    kv1: { activation: 0, density: 5 },
-                    kv3: { activation: 0, density: 5 },
-                    kv7: { activation: 0, density: 3 },
-                    cav2_1: { activation: 0, inactivation: 1, density: 2 },
-                    cav3_1: { activation: 0, inactivation: 1, density: 1 },
-                    hcn1: { activation: 0, density: 1 },
-                    hcn2: { activation: 0, density: 1 }
+                    nav1_1: { activation: 0, inactivation: 1, density: 10, conductance: 20 },
+                    nav1_6: { activation: 0, inactivation: 1, density: 15, conductance: 25 },
+                    kv1: { activation: 0, density: 5, conductance: 10 },
+                    kv3: { activation: 0, density: 5, conductance: 15 },
+                    kv7: { activation: 0, density: 3, conductance: 5 },
+                    cav2_1: { activation: 0, inactivation: 1, density: 2, conductance: 5 },
+                    cav3_1: { activation: 0, inactivation: 1, density: 1, conductance: 3 },
+                    hcn1: { activation: 0, density: 1, conductance: 1 },
+                    hcn2: { activation: 0, density: 1, conductance: 1 },
+                    kir: { activation: 0, density: 2, conductance: 2 },
                 };
 
                 this.signaling_pathways = {
@@ -229,13 +253,18 @@
                 };
 
                 this.metabolism = {
-                    atp: 1000,
-                    adp: 100,
-                    amp: 10,
-                    glucose: 500,
-                    lactate: 100,
-                    oxygen: 1000,
-                    mitochondria: 1000
+                    atp: 1000000,
+                    adp: 100000,
+                    amp: 10000,
+                    glucose: 500000,
+                    lactate: 100000,
+                    oxygen: 1000000,
+                    mitochondria: 1000,
+                    creatine_phosphate: 500000,
+                    creatine: 100000,
+                    nad: 100000,
+                    nadh: 10000,
+                    fadh2: 10000,
                 };
 
                 this.gene_expression = {
@@ -247,9 +276,23 @@
                 };
 
                 this.plasticity = {
-                    stdp: { a_plus: 0.1, a_minus: 0.12, tau_plus: 20, tau_minus: 20 },
-                    homeostatic: { target_activity: 0.1, adjustment_rate: 0.01 },
-                    metaplasticity: { threshold: 0.5, rate: 0.001 }
+                    stdp: { 
+                        a_plus: 0.1, 
+                        a_minus: 0.12, 
+                        tau_plus: 20, 
+                        tau_minus: 20,
+                        nearest_neighbor: true
+                    },
+                    homeostatic: { 
+                        target_activity: 0.1, 
+                        adjustment_rate: 0.01,
+                        sliding_threshold: true
+                    },
+                    metaplasticity: { 
+                        threshold: 0.5, 
+                        rate: 0.001,
+                        bcm_sliding_modification_threshold: 0.5
+                    }
                 };
 
                 this.neuromodulation = {
@@ -285,91 +328,230 @@
                     node_of_ranvier_count: 100,
                     internode_length: 1000
                 };
+
+                this.synaptic_properties = {
+                    ampa_receptors: 500,
+                    nmda_receptors: 100,
+                    gaba_a_receptors: 200,
+                    gaba_b_receptors: 50,
+                };
+
+                this.signaling_cascades = {
+                    camkii: { activation: 0, protein: 1000, phosphorylated: 0 },
+                    pka: { activation: 0, protein: 1000, phosphorylated: 0 },
+                    mapk: { activation: 0, protein: 1000, phosphorylated: 0 },
+                    creb: { activation: 0, protein: 1000, phosphorylated: 0 }
+                };
             }
 
             update(dt) {
-                try {
-                    if (typeof dt !== 'number' || isNaN(dt) || dt <= 0) {
-                    throw new Error('Invalid dt: must be a positive number');
-                    }
+                // if (this.refractory_timer > 0) {
+                // this.refractory_timer -= dt;
+                // this.voltage = -70;
+                // this.is_spiking = false;
+                // return;
+                // }
 
-                    if (this.refractory_timer > 0) {
+                if (this.refractory_timer > 0) {
                     this.refractory_timer -= dt;
-                    this.voltage = -70;
-                    this.is_spiking = false;
-                    return;
-                    }
-
-                    const [dv, dm, dh, dn] = this.hodgkinHuxleyDerivatives();
-                    this.voltage += dv * dt;
-                    this.m += dm * dt;
-                    this.h += dh * dt;
-                    this.n += dn * dt;
-
-                    if (this.voltage >= this.threshold) {
-                    this.is_spiking = true;
-                    this.voltage = 40;
-                    this.refractory_timer = this.refractory_period;
-                    this.releaseNeurotransmitters();
-                    this.propagate_signal();
-                    }
-
-                    this.time += dt;
-                    this.glutamate *= Math.exp(-dt / 5);
-                    this.gaba *= Math.exp(-dt / 5);
-                    this.dopamine *= Math.exp(-dt / 10);
-                    this.serotonin *= Math.exp(-dt / 15);
-                    this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
-                    this.bdnf_level = 1.0 + 0.5 * this.stimulation_level;
-                    this.growth_factor = 1.0 + 0.2 * this.stimulation_level;
-
-                    for (const axon of this.axons) {
-                    axon.grow(dt);
-                    }
-                    for (const dendrite of this.dendrites) {
-                    dendrite.grow(dt);
-                    }
-
-                    if (Math.random() < this.branch_probability * dt) {
-                    this.create_branch();
-                    }
-
-                    const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
-                    const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
-                    this.stimulation_color = `rgb(${r}, ${g}, 255)`;
-
-                    this.safeUpdate('updateProteinSynthesis', dt);
-                    this.safeUpdate('updateGeneExpression', dt);
-                    this.safeUpdate('updateMetabolism', dt);
-                    this.safeUpdate('updateIonConcentrations', dt);
-                    this.safeUpdate('updateNeurotransmitters', dt);
-                    this.safeUpdate('updateIonChannels', dt);
-                    this.safeUpdate('updateSynapticPlasticity', dt);
-                    this.safeUpdate('updateMembranePotential', dt);
-                    this.safeUpdate('updateSignalingPathways', dt);
-                    this.safeUpdate('updateNeuromodulation', dt);
-                    this.safeUpdate('updateGlialInteraction', dt);
-                    this.safeUpdate('updateDendriticComputation', dt);
-                    this.safeUpdate('updateAxonalConduction', dt);
-
-                    this.time += dt;
-                } catch (error) {
-                    console.error('Error in update method:', error);
-                    this.error_state = true;
-                }
-                }
-
-                safeUpdate(methodName, dt) {
-                try {
-                    if (typeof this[methodName] === 'function') {
-                    this[methodName](dt);
+                    if (this.refractory_timer <= this.absolute_refractory_period) {
+                        this.voltage = this.resting_potential + 
+                            (this.voltage - this.resting_potential) * 
+                            (1 - (this.refractory_timer / this.relative_refractory_period));
                     } else {
-                    throw new Error(`Method ${methodName} is not defined`);
+                        this.voltage = this.resting_potential;
                     }
-                } catch (error) {
-                    console.error(`Error in ${methodName}:`, error);
+                    return;
                 }
+                
+                if (this.atp <= 0) {
+                    console.log("Neuron out of energy. Cannot function.");
+                    return;
                 }
+
+                this.voltage += this.received_signals * 5;
+                this.received_signals = 0;
+
+                this.atp -= this.atp_consumption_rate * dt;
+                this.atp += this.atp_production_rate * dt;
+
+                const [dv, dm, dh, dn] = this.hodgkinHuxleyDerivatives();
+                this.voltage += dv * dt;
+                this.m += dm * dt;
+                this.h += dh * dt;
+                this.n += dn * dt;
+
+                if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
+                this.is_spiking = true;
+                this.voltage = 40;
+                this.refractory_timer = this.refractory_period;
+                this.releaseNeurotransmitters();
+                this.propagate_signal();
+                }
+
+                this.activation *= Math.exp(-this.activation_decay_rate * dt);
+                
+                this.voltage += this.activation * 30 * dt;
+
+                if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
+                    this.spike();
+                    this.propagate_signal();
+                }
+
+                this.voltage += (-0.1 * (this.voltage - -70)) * dt;
+                this.activation *= Math.exp(-dt);
+
+                this.time += dt;
+                this.glutamate *= Math.exp(-dt / 5);
+                this.gaba *= Math.exp(-dt / 5);
+                this.dopamine *= Math.exp(-dt / 10);
+                this.serotonin *= Math.exp(-dt / 15);
+                this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
+                this.bdnf_level = 1.0 + 0.5 * this.stimulation_level;
+                this.growth_factor = 1.0 + 0.2 * this.stimulation_level;
+
+                for (const axon of this.axons) {
+                axon.grow(dt);
+                }
+                for (const dendrite of this.dendrites) {
+                dendrite.grow(dt);
+                }
+
+                if (Math.random() < this.branch_probability * dt) {
+                this.create_branch();
+                }
+
+                const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+                const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+                this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+
+                if (this.refractory_timer <= 0) {
+                    this.is_spiking = false;
+                }
+
+                this.updateProteinSynthesis(dt);
+                this.updateGeneExpression(dt);
+                this.updateMetabolism(dt);
+                this.updateIonConcentrations(dt);
+                this.updateNeurotransmitters(dt);
+                this.updateIonChannels(dt);
+                this.updateSynapticPlasticity(dt);
+
+                this.updateMembranePotential(dt);
+                this.updateSignalingPathways(dt);
+                this.updateNeuromodulation(dt);
+                this.updateGlialInteraction(dt);
+                this.updateDendriticComputation(dt);
+                this.updateAxonalConduction(dt);
+                this.updateNetworkEffects(dt);
+                this.updateSignalingCascades(dt);
+
+                this.updateVisualRepresentation();
+
+                this.time += dt;
+                this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
+            }
+
+            spike() {
+                this.is_spiking = true;
+                this.voltage = 40;
+                this.refractory_timer = this.refractory_period;
+                this.activation = 1;
+                this.releaseNeurotransmitters();
+            }
+
+            stimulate(amount) {
+                this.received_signals += amount;
+                this.stimulation_level += amount;
+                this.stimulation_level = Math.min(this.stimulation_level, 1);
+            }
+
+            updateSignalingCascades(dt) {
+                for (let cascade in this.signaling_cascades) {
+                    let c = this.signaling_cascades[cascade];
+                    if (this.calcium_concentration > 0.0002) {
+                        c.activation += 0.1 * dt;
+                        let phosphorylation_rate = 0.01 * c.activation * (c.protein - c.phosphorylated) * dt;
+                        c.protein -= phosphorylation_rate;
+                        c.phosphorylated += phosphorylation_rate;
+                    } else {
+                        c.activation *= Math.exp(-dt / 1000);
+                        let dephosphorylation_rate = 0.001 * c.phosphorylated * dt;
+                        c.protein += dephosphorylation_rate;
+                        c.phosphorylated -= dephosphorylation_rate;
+                    }
+                }
+            }
+
+            alphaActivation(channel, v) {
+                switch(channel) {
+                    case 'nav1_1':
+                    case 'nav1_6':
+                        return 0.1 * (v + 40) / (1 - Math.exp(-(v + 40) / 10));
+                    case 'kv1':
+                    case 'kv3':
+                    case 'kv7':
+                        return 0.01 * (v + 55) / (1 - Math.exp(-(v + 55) / 10));
+                    case 'cav2_1':
+                    case 'cav3_1':
+                        return 0.055 * (v + 27) / (1 - Math.exp(-(v + 27) / 3.8));
+                    case 'hcn1':
+                    case 'hcn2':
+                        return 0.001 * Math.exp((v + 90) / 20);
+                    case 'kir':
+                        return 0.1 * Math.exp((v + 90) / 20);
+                    default:
+                        return 0;
+                }
+            }
+
+            betaActivation(channel, v) {
+                switch(channel) {
+                    case 'nav1_1':
+                    case 'nav1_6':
+                        return 4 * Math.exp(-(v + 65) / 18);
+                    case 'kv1':
+                    case 'kv3':
+                    case 'kv7':
+                        return 0.125 * Math.exp(-(v + 65) / 80);
+                    case 'cav2_1':
+                    case 'cav3_1':
+                        return 0.94 * Math.exp(-(v + 75) / 17);
+                    case 'hcn1':
+                    case 'hcn2':
+                        return 0.001 * Math.exp(-(v + 90) / 20);
+                    case 'kir':
+                        return 0.1 * Math.exp(-(v + 90) / 20);
+                    default:
+                        return 0;
+                }
+            }
+
+            alphaInactivation(channel, v) {
+                switch(channel) {
+                    case 'nav1_1':
+                    case 'nav1_6':
+                        return 0.07 * Math.exp(-(v + 65) / 20);
+                    case 'cav2_1':
+                    case 'cav3_1':
+                        return 0.000457 * Math.exp(-(v + 13) / 50);
+                    default:
+                        return 0;
+                }
+            }
+
+            betaInactivation(channel, v) {
+                switch(channel) {
+                    case 'nav1_1':
+                    case 'nav1_6':
+                        return 1 / (1 + Math.exp(-(v + 35) / 10));
+                    case 'cav2_1':
+                    case 'cav3_1':
+                        return 0.0065 / (1 + Math.exp(-(v + 15) / 28));
+                    default:
+                        return 0;
+                }
+            }
 
             updateMembranePotential(dt) {
                 if (this.refractory_timer > 0) {
@@ -394,28 +576,39 @@
                 }
             }
 
+            propagate_signal() {
+                if (this.atp < 1000) {
+                    console.log("Not enough energy to propagate signal");
+                    return;
+                }
+
+                for (const connection of this.synapses) {
+                    const target_neuron = connection.target;
+                    const signal_strength = connection.weight * (this.type === 'excitatory' ? 1 : -1);
+                    target_neuron.receive_signal(signal_strength, this.type);
+                }
+
+                this.atp -= 1000;
+            }
+
+            updateNetworkEffects(dt) {
+                this.network_activity = this.neighboring_neurons.reduce((sum, neuron) => sum + neuron.activation, 0) / this.neighboring_neurons.length;
+
+                this.activation += 0.1 * (this.network_activity - this.activation) * dt;
+
+                if (this.is_spiking) {
+                    for (let neighbor of this.neighboring_neurons) {
+                        neighbor.receive_signal(0.1, this.type);
+                    }
+                }
+            }
+
             updateIonChannels(dt) {
                 for (let channel in this.ion_channels) {
                     let c = this.ion_channels[channel];
-                    switch (channel) {
-                        case 'nav1_1':
-                        case 'nav1_6':
-                            c.activation = this.updateChannelState(c.activation, this.alphaM(this.voltage), this.betaM(this.voltage), dt);
-                            c.inactivation = this.updateChannelState(c.inactivation, this.alphaH(this.voltage), this.betaH(this.voltage), dt);
-                            break;
-                        case 'kv1':
-                        case 'kv3':
-                        case 'kv7':
-                            c.activation = this.updateChannelState(c.activation, this.alphaN(this.voltage), this.betaN(this.voltage), dt);
-                            break;
-                        case 'cav2_1':
-                        case 'cav3_1':
-                            c.activation = this.updateChannelState(c.activation, this.alphaC(this.voltage), this.betaC(this.voltage), dt);
-                            break;
-                        case 'hcn1':
-                        case 'hcn2':
-                            c.activation = this.updateChannelState(c.activation, this.alphaH(this.voltage), this.betaH(this.voltage), dt);
-                            break;
+                    c.activation = this.updateChannelState(c.activation, this.alphaActivation(channel, this.voltage), this.betaActivation(channel, this.voltage), dt);
+                    if ('inactivation' in c) {
+                        c.inactivation = this.updateChannelState(c.inactivation, this.alphaInactivation(channel, this.voltage), this.betaInactivation(channel, this.voltage), dt);
                     }
                 }
             }
@@ -450,23 +643,27 @@
             }
 
             updateMetabolism(dt) {
-                let atp_consumption = 10 * dt * (1 + this.is_spiking * 10);
-                this.metabolism.atp -= atp_consumption;
-                this.metabolism.adp += atp_consumption;
+                let glycolysis_rate = Math.min(this.metabolism.glucose, this.metabolism.adp / 2, this.metabolism.nad / 2) * 0.1 * dt;
+                this.metabolism.glucose -= glycolysis_rate;
+                this.metabolism.adp -= 2 * glycolysis_rate;
+                this.metabolism.nad -= 2 * glycolysis_rate;
+                this.metabolism.atp += 2 * glycolysis_rate;
+                this.metabolism.nadh += 2 * glycolysis_rate;
+                this.metabolism.lactate += 2 * glycolysis_rate;
 
-                let glycolysis = Math.min(this.metabolism.glucose, this.metabolism.adp / 2) * dt;
-                this.metabolism.glucose -= glycolysis;
-                this.metabolism.lactate += glycolysis;
-                this.metabolism.adp -= glycolysis * 2;
-                this.metabolism.atp += glycolysis * 2;
+                let oxphos_rate = Math.min(this.metabolism.nadh, this.metabolism.fadh2, this.metabolism.adp / 3, this.metabolism.oxygen / 2) * 0.1 * dt;
+                this.metabolism.nadh -= oxphos_rate;
+                this.metabolism.fadh2 -= oxphos_rate;
+                this.metabolism.adp -= 3 * oxphos_rate;
+                this.metabolism.oxygen -= 2 * oxphos_rate;
+                this.metabolism.atp += 15 * oxphos_rate;
+                this.metabolism.nad += oxphos_rate;
 
-                let oxphos = Math.min(this.metabolism.lactate, this.metabolism.oxygen / 3, this.metabolism.adp / 3) * dt;
-                this.metabolism.lactate -= oxphos;
-                this.metabolism.oxygen -= oxphos * 3;
-                this.metabolism.adp -= oxphos * 3;
-                this.metabolism.atp += oxphos * 18;
-
-                this.metabolism.mitochondria += (1000 - this.metabolism.mitochondria) * 0.01 * dt;
+                let creatine_shuttle_rate = (this.metabolism.creatine_phosphate * this.metabolism.adp - this.metabolism.creatine * this.metabolism.atp / 10) * 0.01 * dt;
+                this.metabolism.creatine_phosphate -= creatine_shuttle_rate;
+                this.metabolism.adp -= creatine_shuttle_rate;
+                this.metabolism.creatine += creatine_shuttle_rate;
+                this.metabolism.atp += creatine_shuttle_rate;
             }
 
             updateGeneExpression(dt) {
@@ -499,23 +696,27 @@
                 for (let synapse of this.synapses) {
                     let delta_t = this.time - synapse.last_spike_time;
                     let dw = 0;
-                    if (delta_t > 0) {
-                        dw = this.plasticity.stdp.a_plus * Math.exp(-delta_t / this.plasticity.stdp.tau_plus);
+                    if (this.plasticity.stdp.nearest_neighbor) {
+                        if (delta_t > 0) {
+                            dw = this.plasticity.stdp.a_plus * Math.exp(-delta_t / this.plasticity.stdp.tau_plus);
+                        } else {
+                            dw = -this.plasticity.stdp.a_minus * Math.exp(delta_t / this.plasticity.stdp.tau_minus);
+                        }
                     } else {
-                        dw = -this.plasticity.stdp.a_minus * Math.exp(delta_t / this.plasticity.stdp.tau_minus);
+                        dw = this.plasticity.stdp.a_plus * Math.exp(-Math.abs(delta_t) / this.plasticity.stdp.tau_plus) -
+                            this.plasticity.stdp.a_minus * Math.exp(-Math.abs(delta_t) / this.plasticity.stdp.tau_minus);
                     }
                     synapse.weight += dw;
 
                     let activity_difference = this.plasticity.homeostatic.target_activity - synapse.average_activity;
+                    if (this.plasticity.homeostatic.sliding_threshold) {
+                        activity_difference *= (1 + synapse.average_activity);
+                    }
                     synapse.weight += activity_difference * this.plasticity.homeostatic.adjustment_rate * dt;
 
-                    if (synapse.average_activity > this.plasticity.metaplasticity.threshold) {
-                        this.plasticity.stdp.a_plus -= this.plasticity.metaplasticity.rate * dt;
-                        this.plasticity.stdp.a_minus += this.plasticity.metaplasticity.rate * dt;
-                    } else {
-                        this.plasticity.stdp.a_plus += this.plasticity.metaplasticity.rate * dt;
-                        this.plasticity.stdp.a_minus -= this.plasticity.metaplasticity.rate * dt;
-                    }
+                    let modification_threshold = this.plasticity.metaplasticity.bcm_sliding_modification_threshold;
+                    let bcm_change = synapse.average_activity * (synapse.average_activity - modification_threshold);
+                    synapse.weight += bcm_change * this.plasticity.metaplasticity.rate * dt;
 
                     synapse.weight = Math.max(0, Math.min(1, synapse.weight));
                 }
@@ -650,32 +851,65 @@
             }
 
             releaseNeurotransmitters() {
-                if (this.type === 'excitatory') {
-                    this.glutamate += 1;
-                } else if (this.type === 'inhibitory') {
-                    this.gaba += 1;
+                if (Math.random() < this.vesicle_release_probability) {
+                    if (this.type === 'excitatory') {
+                        this.glutamate += 1;
+                    } else if (this.type === 'inhibitory') {
+                        this.gaba += 1;
+                    }
+                    this.atp -= 1000;
                 }
                 this.dopamine += 0.1;
                 this.serotonin += 0.05;
             }
 
-            propagate_signal() {
-                for (const synapse of this.synapses) {
-                    if (synapse.pre_neuron === this) {
-                        synapse.post_neuron.receive_signal(synapse.weight, this.type);
-                    }
-                }
+            alphaHCN(v) {
+                return 0.001 * Math.exp((v + 90) / 20);
+            }
+
+            betaHCN(v) {
+                return 0.001 * Math.exp(-(v + 90) / 20);
             }
 
             receive_signal(strength, type) {
-                if (type === 'excitatory') {
-                    this.stimulation_level += strength;
-                    this.voltage += strength * 5;
-                } else if (type === 'inhibitory') {
-                    this.stimulation_level -= strength;
-                    this.voltage -= strength * 5;
+                if (this.atp < 500) {
+                    console.log("Not enough energy to process incoming signal");
+                    return;
                 }
+
+                if (this.refractory_timer > 0) return;
+
+                if (type === 'excitatory') {
+                    this.activation += strength;
+                } else if (type === 'inhibitory') {
+                    this.activation -= strength;
+                }
+
+                this.activation = Math.max(0, Math.min(this.activation, 1));
+                this.stimulation_level += Math.abs(strength) * 0.1;
                 this.stimulation_level = Math.max(0, Math.min(this.stimulation_level, 1));
+                
+                this.voltage += strength * 5;
+                this.updateVisualRepresentation();
+
+                this.atp -= 500;
+            }
+
+            updateVisualRepresentation() {
+                if (this.visual_element) {
+                    const r = Math.floor(255 * this.stimulation_level);
+                    const g = Math.floor(255 * (1 - this.stimulation_level));
+                    const b = 255;
+                    this.visual_element.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+                    
+                    const size = 10 + (10 * this.stimulation_level);
+                    this.visual_element.style.width = `${size}px`;
+                    this.visual_element.style.height = `${size}px`;
+                }
+            }
+
+            setVisualElement(element) {
+                this.visual_element = element;
             }
 
             create_branch() {
@@ -698,15 +932,15 @@
                 this.dendrites.push(new Dendrite(this, direction));
             }
 
-            stimulate(amount) {
-                this.stimulation_level += amount;
-                this.stimulation_level = Math.min(this.stimulation_level, 1);
-                this.voltage += amount * 30;
+            // stimulate(amount) {
+            //     this.stimulation_level += amount;
+            //     this.stimulation_level = Math.min(this.stimulation_level, 1);
+            //     this.voltage += amount * 30;
                 
-                const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
-                const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
-                this.stimulation_color = `rgb(${r}, ${g}, 255)`;
-            }
+            //     const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+            //     const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+            //     this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+            // }
 
             alpha_m() { return 0.1 * (this.voltage + 40) / (1 - Math.exp(-(this.voltage + 40) / 10)); }
             beta_m() { return 4 * Math.exp(-(this.voltage + 65) / 18); }
@@ -734,7 +968,7 @@
                 this.growth_cone = start_point || new Vector2D(neuron.position.x, neuron.position.y);
                 this.segments = [this.growth_cone];
                 this.max_segment_length = 20;
-                this.max_length = 150;
+                this.max_length = 300;
             }
 
             grow(dt) {
@@ -798,7 +1032,7 @@
                 this.tip = start_point || new Vector2D(neuron.position.x, neuron.position.y);
                 this.segments = [this.tip];
                 this.max_segment_length = 15;
-                this.max_length = 75;
+                this.max_length = 150;
             }
 
             grow(dt) {
@@ -861,6 +1095,17 @@
                 this.nmda_receptors = 20;
                 this.ampa_conductance = 0;
                 this.nmda_conductance = 0;
+
+                this.ampa_activation = 0;
+                this.nmda_activation = 0;
+                this.gaba_a_activation = 0;
+                this.gaba_b_activation = 0;
+
+                this.facilitation = 1;
+                this.depression = 1;
+                this.facilitation_rate = 0.1;
+                this.depression_rate = 0.2;
+                this.recovery_rate = 0.01;
             }
 
             update(dt) {
@@ -896,6 +1141,38 @@
                 this.updateVesiclePool(dt);
                 this.updateNeurotransmitterDynamics(dt);
                 this.updateReceptorDynamics(dt);
+                this.updateReceptorActivations(dt);
+
+                this.updateShortTermPlasticity(dt);
+            }
+
+            updateReceptorActivations(dt) {
+                const decay_rate = 0.1;
+                this.ampa_activation *= Math.exp(-decay_rate * dt);
+                this.nmda_activation *= Math.exp(-decay_rate * dt);
+                this.gaba_a_activation *= Math.exp(-decay_rate * dt);
+                this.gaba_b_activation *= Math.exp(-decay_rate * dt);
+
+                if (this.pre_neuron.is_spiking) {
+                    if (this.is_excitatory) {
+                        this.ampa_activation += 1;
+                        this.nmda_activation += 0.1;
+                    } else {
+                        this.gaba_a_activation += 1;
+                        this.gaba_b_activation += 0.1;
+                    }
+                }
+            }
+
+            updateShortTermPlasticity(dt) {
+                if (this.pre_neuron.is_spiking) {
+                    this.facilitation *= (1 + this.facilitation_rate);
+                    this.depression *= (1 - this.depression_rate);
+                } else {
+                    this.facilitation += (1 - this.facilitation) * this.recovery_rate * dt;
+                    this.depression += (1 - this.depression) * this.recovery_rate * dt;
+                }
+                this.weight *= this.facilitation * this.depression;
             }
 
             updateVesiclePool(dt) {
@@ -1012,6 +1289,19 @@
                     this.glia.push(new Glia(new Vector2D(x, y)));
                 }
                 this.initialize_neuron_growth();
+                // this.initialize_connectivity();
+            }
+
+            initialize_connectivity() {
+                for (const pre_neuron of this.neurons) {
+                    for (const post_neuron of this.neurons) {
+                        if (pre_neuron !== post_neuron && Math.random() < 0.2) {
+                            const synapse = new Synapse(pre_neuron, post_neuron);
+                            pre_neuron.synapses.push(synapse);
+                            post_neuron.synapses.push(synapse);
+                        }
+                    }
+                }
             }
 
             initialize_neuron_growth() {
@@ -1029,9 +1319,22 @@
 
             stimulate_neuron(index) {
                 this.neurons[index].stimulate(1);
-                for (const synapse of this.neurons[index].synapses) {
-                    if (synapse.pre_neuron === this.neurons[index]) {
-                        synapse.post_neuron.receive_signal(synapse.weight);
+                this.propagate_signal(this.neurons[index]);
+            }
+
+            propagate_signal(neuron, depth = 0) {
+                if (depth > 5) return;
+
+                for (const synapse of neuron.synapses) {
+                    if (synapse.pre_neuron === neuron) {
+                        const signal_strength = synapse.weight * neuron.activation;
+                        synapse.post_neuron.receive_signal(signal_strength, neuron.type);
+                        
+                        if (signal_strength > 0.1) {
+                            setTimeout(() => {
+                                this.propagate_signal(synapse.post_neuron, depth + 1);
+                            }, 50);
+                        }
                     }
                 }
             }
@@ -1057,7 +1360,6 @@
                     glial_cell.update(dt, nearby_neurons);
                 }
                 for (const neuron of this.neurons) {
-                    neuron.update(dt);
                     for (const synapse of neuron.synapses) {
                         synapse.update(dt);
                     }
@@ -1186,9 +1488,7 @@
         function animate() {
             try {
                 if (isSimulating) {
-                    for (let i = 0; i < 10; i++) { 
-                        network.update(0.01);
-                    }
+                    network.update(0.05);
                 }
                 drawNetwork();
             } catch (error) {
