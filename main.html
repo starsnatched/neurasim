@@ -185,23 +185,31 @@
             constructor(position, type = 'excitatory') {
                 this.position = position;
                 this.type = type;
-                this.voltage = -70;
-                this.threshold = -55;
+                this.voltage = -70; // mV
+                this.threshold = -55; // mV
                 this.is_spiking = false;
-                this.refractory_period = 2;
+                this.refractory_period = 2; // ms
                 this.refractory_timer = 0;
                 this.time = 0;
                 this.received_signals = 0;
+                this.target_voltage = -70; // mV
+                this.voltage_recovery_rate = 0.1; // Rate at which voltage returns to target
+                this.target_activation = 0;
+                this.activation_recovery_rate = 0.05;
+                this.target_stimulation_level = 0;
+                this.stimulation_recovery_rate = 0.01;
                 
                 this.dendrites = [];
                 this.axons = [];
                 this.synapses = [];
                 this.neighboring_neurons = [];
 
-                this.atp = 1000000;
-                this.atp_consumption_rate = 100;
-                this.atp_production_rate = 110;
+                // Energy metabolism
+                this.atp = 1000000; // ATP molecules
+                this.atp_consumption_rate = 100; // ATP/ms
+                this.atp_production_rate = 110; // ATP/ms
 
+                // Probabilistic channel and vesicle dynamics
                 this.channel_open_probability = 0.5;
                 this.vesicle_release_probability = 0.3;
 
@@ -209,24 +217,27 @@
 
                 this.visual_element = null;
 
+                // Izhikevich model parameters
                 this.a = 0.02;
                 this.b = 0.2;
                 this.c = -65;
                 this.d = 2;
                 this.u = this.b * this.voltage;
 
-                this.g_Na = 120;
-                this.g_K = 36;  
-                this.g_L = 0.3; 
-                this.E_Na = 55; 
-                this.E_K = -77; 
-                this.E_L = -54; 
-                this.m = 0.05;  
-                this.h = 0.54;  
-                this.n = 0.34;
+                // Hodgkin-Huxley parameters
+                this.g_Na = 120; // mS/cm^2
+                this.g_K = 36;   // mS/cm^2
+                this.g_L = 0.3;  // mS/cm^2
+                this.E_Na = 55;  // mV
+                this.E_K = -77;  // mV
+                this.E_L = -54;  // mV
+                this.m = 0.05;   // Na+ activation
+                this.h = 0.54;   // Na+ inactivation
+                this.n = 0.34;   // K+ activation
 
-                this.capacitance = 1;
+                this.capacitance = 1; // µF/cm^2
 
+                // Neurotransmitter concentrations
                 this.glutamate = 0;
                 this.gaba = 0;
                 this.dopamine = 0;
@@ -234,6 +245,7 @@
                 this.activation = 0;
                 this.flash_duration = 0;
 
+                // Plasticity parameters
                 this.stimulation_level = 0;
                 this.stimulation_decay_rate = 0.1;
                 this.activation_threshold = 0.5; 
@@ -242,27 +254,35 @@
                 this.branch_probability = 0.05;
                 this.stimulation_color = 'rgb(0, 0, 255)';
 
+                // Protein synthesis and gene expression
                 this.protein_synthesis_rate = 0.1;
                 this.gene_expression_level = 1.0;
                 this.metabolic_rate = 1.0;
+
+                // Ion concentrations (mM)
                 this.calcium_concentration = 0.0001;
                 this.potassium_concentration = 5.0;
                 this.sodium_concentration = 15.0;
 
-                this.resting_potential = -70;
+                // Membrane properties
+                this.resting_potential = -70; // mV
                 this.voltage = this.resting_potential;
 
-                this.absolute_refractory_period = 0.001;
-                this.relative_refractory_period = 0.005;
+                // Refractory periods
+                this.absolute_refractory_period = 1; // ms
+                this.relative_refractory_period = 5; // ms
 
+                // Synaptic properties
                 this.neurotransmitter_release_probability = 0.5;
                 this.neurotransmitter_reuptake_rate = 0.1;
 
+                // Neuromodulation
                 this.dopamine_receptors = Math.random() * 0.5 + 0.5; 
                 this.serotonin_receptors = Math.random() * 0.5 + 0.5;
                 this.dopamine_level = 0;
                 this.serotonin_level = 0;
 
+                // Detailed neurotransmitter dynamics
                 this.neurotransmitters = {
                     glutamate: { vesicles: 1000, recycling_pool: 100, readily_releasable_pool: 10, synthesis_rate: 0.1 },
                     gaba: { vesicles: 1000, recycling_pool: 100, readily_releasable_pool: 10, synthesis_rate: 0.1 },
@@ -272,6 +292,7 @@
                     acetylcholine: { vesicles: 500, recycling_pool: 50, readily_releasable_pool: 5, synthesis_rate: 0.05 }
                 };
 
+                // Ion channel dynamics
                 this.ion_channels = {
                     nav1_1: { activation: 0, inactivation: 1, density: 10, conductance: 20 },
                     nav1_6: { activation: 0, inactivation: 1, density: 15, conductance: 25 },
@@ -285,6 +306,7 @@
                     kir: { activation: 0, density: 2, conductance: 2 },
                 };
 
+                // Signaling pathways
                 this.signaling_pathways = {
                     camkii: { activation: 0 },
                     pka: { activation: 0 },
@@ -292,6 +314,7 @@
                     pi3k: { activation: 0 }
                 };
 
+                // Detailed metabolism
                 this.metabolism = {
                     atp: 1000000,
                     adp: 100000,
@@ -307,6 +330,7 @@
                     fadh2: 10000,
                 };
 
+                // Gene expression
                 this.gene_expression = {
                     bdnf: { mrna: 100, protein: 1000, methylation: 0.1 },
                     creb: { mrna: 100, protein: 1000, phosphorylation: 0.1 },
@@ -315,6 +339,7 @@
                     egr1: { mrna: 100, protein: 1000, acetylation: 0.1 }
                 };
 
+                // Synaptic plasticity
                 this.plasticity = {
                     stdp: { 
                         a_plus: 0.1, 
@@ -335,6 +360,7 @@
                     }
                 };
 
+                // Neuromodulation sensitivity
                 this.neuromodulation = {
                     dopamine_sensitivity: 1,
                     serotonin_sensitivity: 1,
@@ -342,12 +368,14 @@
                     acetylcholine_sensitivity: 1
                 };
 
+                // Glial cell interaction
                 this.glial_interaction = {
                     astrocyte_coverage: 0.5,
                     oligodendrocyte_coverage: 0.3,
                     microglia_state: 'resting'
                 };
 
+                // Dendritic computation
                 this.dendritic_segments = [];
                 for (let i = 0; i < 10; i++) {
                     this.dendritic_segments.push({
@@ -358,17 +386,20 @@
                     });
                 }
 
+                // Axon initial segment
                 this.axon_initial_segment = {
-                    length: 50,
-                    nav_channel_density: 1000
+                    length: 50, // µm
+                    nav_channel_density: 1000 // channels/µm^2
                 };
 
+                // Myelination
                 this.myelination = {
                     degree: 0.8,
                     node_of_ranvier_count: 100,
-                    internode_length: 1000
+                    internode_length: 1000 // µm
                 };
 
+                // Synaptic properties
                 this.synaptic_properties = {
                     ampa_receptors: 500,
                     nmda_receptors: 100,
@@ -376,6 +407,7 @@
                     gaba_b_receptors: 50,
                 };
 
+                // Signaling cascades
                 this.signaling_cascades = {
                     camkii: { activation: 0, protein: 1000, phosphorylated: 0 },
                     pka: { activation: 0, protein: 1000, phosphorylated: 0 },
@@ -385,13 +417,7 @@
             }
 
             update(dt) {
-                // if (this.refractory_timer > 0) {
-                // this.refractory_timer -= dt;
-                // this.voltage = -70;
-                // this.is_spiking = false;
-                // return;
-                // }
-
+                // Refractory period handling
                 if (this.refractory_timer > 0) {
                     this.refractory_timer -= dt;
                     if (this.refractory_timer <= this.absolute_refractory_period) {
@@ -404,71 +430,82 @@
                     return;
                 }
                 
+                // Energy check
                 if (this.atp <= 0) {
                     console.log("Neuron out of energy. Cannot function.");
                     return;
                 }
 
+                // Process received signals
                 this.voltage += this.received_signals * 5;
                 this.received_signals = 0;
 
+                // Energy metabolism
                 this.atp -= this.atp_consumption_rate * dt;
                 this.atp += this.atp_production_rate * dt;
 
+                // Hodgkin-Huxley model update
                 const [dv, dm, dh, dn] = this.hodgkinHuxleyDerivatives();
                 this.voltage += dv * dt;
                 this.m += dm * dt;
                 this.h += dh * dt;
                 this.n += dn * dt;
 
-                // if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
-                // this.is_spiking = true;
-                // this.voltage = 40;
-                // this.refractory_timer = this.refractory_period;
-                // this.propagate_signal();
-                // }
-
+                // Activation decay
                 this.activation *= Math.exp(-this.activation_decay_rate * dt);
                 
+                // Voltage update based on activation
                 this.voltage += this.activation * 30 * dt;
 
+                // Spike generation
                 if (this.voltage >= this.threshold && !this.is_spiking && this.refractory_timer <= 0) {
                     this.spike();
                     this.releaseNeurotransmitters();
                     this.propagate_signal();
                 }
 
-                this.voltage += (-0.1 * (this.voltage - -70)) * dt;
+                // Voltage decay
+                this.voltage += (-0.1 * (this.voltage - this.resting_potential)) * dt;
                 this.activation *= Math.exp(-dt);
 
+                // Time update
                 this.time += dt;
+
+                // Neurotransmitter decay
                 this.glutamate *= Math.exp(-dt / 5);
                 this.gaba *= Math.exp(-dt / 5);
                 this.dopamine *= Math.exp(-dt / 10);
                 this.serotonin *= Math.exp(-dt / 15);
+
+                // Stimulation level decay
                 this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
                 this.bdnf_level = 1.0 + 0.5 * this.stimulation_level;
                 this.growth_factor = 1.0 + 0.2 * this.stimulation_level;
 
+                // Axon and dendrite growth
                 for (const axon of this.axons) {
-                axon.grow(dt);
+                    axon.grow(dt);
                 }
                 for (const dendrite of this.dendrites) {
-                dendrite.grow(dt);
+                    dendrite.grow(dt);
                 }
 
+                // Branch creation
                 if (Math.random() < this.branch_probability * dt) {
-                this.create_branch();
+                    this.create_branch();
                 }
 
+                // Update stimulation color
                 const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
                 const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
                 this.stimulation_color = `rgb(${r}, ${g}, 255)`;
 
+                // Reset spiking state
                 if (this.refractory_timer <= 0) {
                     this.is_spiking = false;
                 }
 
+                // Update various neuron properties
                 this.updateProteinSynthesis(dt);
                 this.updateGeneExpression(dt);
                 this.updateMetabolism(dt);
@@ -476,7 +513,6 @@
                 this.updateNeurotransmitters(dt);
                 this.updateIonChannels(dt);
                 this.updateSynapticPlasticity(dt);
-
                 this.updateMembranePotential(dt);
                 this.updateSignalingPathways(dt);
                 this.updateNeuromodulation(dt);
@@ -486,48 +522,67 @@
                 this.updateNetworkEffects(dt);
                 this.updateSignalingCascades(dt);
                 this.updateNeurotransmitterLevels(dt);
+                this.updateHomeostasis(dt);
 
+                // Update visual representation
                 this.updateVisualRepresentation();
-
-                this.time += dt;
-                this.stimulation_level *= Math.exp(-this.stimulation_decay_rate * dt);
             }
 
             spike() {
                 this.is_spiking = true;
-                this.voltage = 40;
+                this.voltage = 40; // mV
                 this.refractory_timer = this.refractory_period;
                 this.activation = 1;
                 this.releaseNeurotransmitters();
-                this.flash_duration = 20;
+                this.flash_duration = 1;
+                this.voltage = this.c; // Reset voltage to after-spike reset value
+                this.activation = 1;
+            }
+
+            updateHomeostasis(dt) {
+                // Voltage homeostasis
+                this.voltage += (this.target_voltage - this.voltage) * this.voltage_recovery_rate * dt;
+
+                // Activation homeostasis
+                this.activation += (this.target_activation - this.activation) * this.activation_recovery_rate * dt;
+
+                // Stimulation level homeostasis
+                this.stimulation_level += (this.target_stimulation_level - this.stimulation_level) * this.stimulation_recovery_rate * dt;
+
+                // Ensure values are within acceptable ranges
+                this.voltage = Math.max(this.resting_potential, Math.min(this.voltage, 40));
+                this.activation = Math.max(0, Math.min(this.activation, 1));
+                this.stimulation_level = Math.max(0, Math.min(this.stimulation_level, 1));
             }
 
             updateNeurotransmitterLevels(dt) {
                 this.dopamine_level *= Math.exp(-dt / 10); 
                 this.serotonin_level *= Math.exp(-dt / 20);
 
+                // Dopamine modulates threshold
                 this.threshold -= this.dopamine_level * this.dopamine_receptors * 5;
                 this.threshold = Math.max(this.threshold, -65);
 
+                // Serotonin modulates threshold in opposite direction
                 this.threshold += this.serotonin_level * this.serotonin_receptors * 3;
                 this.threshold = Math.min(this.threshold, -45); 
             }
 
             stimulate(amount) {
-                    this.stimulation_level += amount;
-                    this.stimulation_level = Math.min(this.stimulation_level, 1);
-                    this.voltage += amount * 30;
-                    
-                    if (!this.is_spiking && this.refractory_timer <= 0) {
-                        this.spike();
-                    }
-                    
-                    this.flash_duration = 20;
-                    
-                    const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
-                    const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
-                    this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+                this.stimulation_level += amount;
+                this.stimulation_level = Math.min(this.stimulation_level, 0.9);
+                this.voltage += amount * 30;
+                
+                if (!this.is_spiking && this.refractory_timer <= 0) {
+                    this.spike();
                 }
+                
+                this.flash_duration = 1;
+                
+                const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
+                const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
+                this.stimulation_color = `rgb(${r}, ${g}, 255)`;
+            }
 
             updateSignalingCascades(dt) {
                 for (let cascade in this.signaling_cascades) {
@@ -624,6 +679,7 @@
                     return;
                 }
 
+                // Izhikevich model
                 let dv = (0.04 * this.voltage + 5) * this.voltage + 140 - this.u;
                 let du = this.a * (this.b * this.voltage - this.u);
 
@@ -926,14 +982,6 @@
                 this.serotonin += 0.05;
             }
 
-            alphaHCN(v) {
-                return 0.001 * Math.exp((v + 90) / 20);
-            }
-
-            betaHCN(v) {
-                return 0.001 * Math.exp(-(v + 90) / 20);
-            }
-
             receive_signal(strength, type) {
                 if (this.atp < 500) {
                     console.log("Not enough energy to process incoming signal");
@@ -999,23 +1047,7 @@
                 this.dendrites.push(new Dendrite(this, direction));
             }
 
-            // stimulate(amount) {
-            //     this.stimulation_level += amount;
-            //     this.stimulation_level = Math.min(this.stimulation_level, 1);
-            //     this.voltage += amount * 30;
-                
-            //     const r = Math.max(0, Math.min(255, Math.floor(255 * this.stimulation_level)));
-            //     const g = Math.max(0, Math.min(255, Math.floor(255 * (1 - this.stimulation_level))));
-            //     this.stimulation_color = `rgb(${r}, ${g}, 255)`;
-            // }
-
-            alpha_m() { return 0.1 * (this.voltage + 40) / (1 - Math.exp(-(this.voltage + 40) / 10)); }
-            beta_m() { return 4 * Math.exp(-(this.voltage + 65) / 18); }
-            alpha_h() { return 0.07 * Math.exp(-(this.voltage + 65) / 20); }
-            beta_h() { return 1 / (1 + Math.exp(-(this.voltage + 35) / 10)); }
-            alpha_n() { return 0.01 * (this.voltage + 55) / (1 - Math.exp(-(this.voltage + 55) / 10)); }
-            beta_n() { return 0.125 * Math.exp(-(this.voltage + 65) / 80); }
-
+            // Helper methods for channel dynamics
             alphaM(v) { return 0.1 * (v + 40) / (1 - Math.exp(-(v + 40) / 10)); }
             betaM(v) { return 4 * Math.exp(-(v + 65) / 18); }
             alphaH(v) { return 0.07 * Math.exp(-(v + 65) / 20); }
@@ -1399,7 +1431,7 @@
                 neuron.stimulate(1);
                 this.propagate_signal(neuron);
                 
-                neuron.flash_duration = 20;
+                neuron.flash_duration = 1;
             }
 
             reward(amount = 1) {
