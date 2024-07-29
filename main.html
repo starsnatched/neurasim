@@ -130,7 +130,7 @@
 <body>
     <div class="container">
         <h1>Neural Network Simulation</h1>
-        <canvas id="network-canvas" width="600" height="400"></canvas>
+        <canvas id="network-canvas" width="1200" height="800"></canvas>
         <div class="controls">
             <button id="reset-btn" class="control-btn">Reset Network</button>
             <button id="toggle-sim-btn" class="control-btn">Start Simulation</button>
@@ -1338,13 +1338,13 @@
                 this.neurons = [];
                 this.glia = [];
                 for (let i = 0; i < num_neurons; i++) {
-                    const x = Math.random() * 550 + 25;
-                    const y = Math.random() * 350 + 25;
+                    const x = Math.random() * 1150 + 25;
+                    const y = Math.random() * 750 + 25;
                     this.neurons.push(new Neuron(new Vector2D(x, y)));
                 }
                 for (let i = 0; i < num_glia; i++) {
-                    const x = Math.random() * 550 + 25;
-                    const y = Math.random() * 350 + 25;
+                    const x = Math.random() * 1150 + 25;
+                    const y = Math.random() * 750 + 25;
                     this.glia.push(new Glia(new Vector2D(x, y)));
                 }
                 this.initialize_neuron_growth();
@@ -1446,6 +1446,9 @@
         const ctx = canvas.getContext('2d');
         let network = new NeuralNetwork(100, 20);
         let isSimulating = false;
+
+        canvas.width = 1200
+        canvas.height = 800;
 
         function drawNetwork() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
