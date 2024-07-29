@@ -125,6 +125,20 @@
         #punish-btn:hover {
             background: rgba(231, 76, 60, 0.3);
         }
+
+        #add-neuron-btn {
+            background: rgba(52, 152, 219, 0.1);
+        }
+        #add-neuron-btn:hover {
+            background: rgba(52, 152, 219, 0.3);
+        }
+
+        #remove-neuron-btn {
+            background: rgba(231, 76, 60, 0.1);
+        }
+        #remove-neuron-btn:hover {
+            background: rgba(231, 76, 60, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -137,6 +151,8 @@
             <button id="reward-btn" class="control-btn">Reward</button>
             <button id="punish-btn" class="control-btn">Punish</button>
             <!-- <button id="game-btn" class="control-btn">Start Game</button> -->
+            <button id="add-neuron-btn" class="control-btn">Add Neuron</button>
+            <button id="remove-neuron-btn" class="control-btn">Remove Neuron</button>
         </div>
     </div>
     <div id="error-console">
@@ -1442,9 +1458,12 @@
             }
         }
 
+        let neuron_count = 100;
+        let glia_count = 50;
+
         const canvas = document.getElementById('network-canvas');
         const ctx = canvas.getContext('2d');
-        let network = new NeuralNetwork(100, 20);
+        let network = new NeuralNetwork(neuron_count, glia_count);
         let isSimulating = false;
 
         canvas.width = 1200
@@ -1714,7 +1733,7 @@
 
         document.getElementById('reset-btn').addEventListener('click', () => {
             try {
-                network = new NeuralNetwork(100, 20);
+                network = new NeuralNetwork(neuron_count, glia_count);
             } catch (error) {
                 logError(`Error resetting network: ${error.message}`);
                 console.error(error);
@@ -1754,6 +1773,28 @@
                 }, 300);
             } catch (error) {
                 logError(`Error punishing network: ${error.message}`);
+                console.error(error);
+            }
+        });
+
+        document.getElementById('add-neuron-btn')?.addEventListener('click', () => {
+            try {
+                neuron_count += 1;
+                network.neurons.push(new Neuron(new Vector2D(Math.random() * 1200, Math.random() * 800)));
+            } catch (error) {
+                logError(`Error adding neuron: ${error.message}`);
+                console.error(error);
+            }
+        });
+
+        document.getElementById('remove-neuron-btn')?.addEventListener('click', () => {
+            try {
+                if (network.neurons.length > 0) {
+                    neuron_count -= 1;
+                    network.neurons.pop();
+                }
+            } catch (error) {
+                logError(`Error removing neuron: ${error.message}`);
                 console.error(error);
             }
         });
