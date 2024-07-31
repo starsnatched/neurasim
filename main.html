@@ -2384,7 +2384,7 @@
 
             stimulate_neuron(index) {
                 const neuron = this.neurons[index];
-                neuron.stimulate(1);
+                neuron.stimulate(10);
                 this.propagate_signal(neuron);
                 
                 neuron.flash_duration = 1;
@@ -2453,9 +2453,6 @@
         const ctx = canvas.getContext('2d');
         let network = new NeuralNetwork(neuron_count, glia_count);
         let isSimulating = false;
-
-        canvas.width = 1200
-        canvas.height = 800;
 
         function drawNetwork() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
